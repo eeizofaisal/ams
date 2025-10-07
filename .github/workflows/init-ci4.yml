@@ -19,33 +19,40 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+          tools: composer
           coverage: none
 
-      - name: Install system deps
-        run: sudo apt-get update && sudo apt-get install -y unzip
+      - name: Show Composer/PHP versions
+        shell: bash
+        run: |
+          php -v
+          composer -V
 
-      - name: Create CI4 app in temp dir
+      - name: Create CodeIgniter 4 app in temp dir
+        shell: bash
         run: composer create-project codeigniter4/appstarter app-tmp
 
       - name: Require dompdf inside temp app
+        shell: bash
         working-directory: app-tmp
         run: composer require dompdf/dompdf:^2.0
 
-      - name: Move app files to repo (preserve .git)
+      - name: Copy app files into repo (preserve .git)
+        shell: bash
         run: |
-          shopt -s dotglob
-          rm -rf ./* || true
-          shopt -u dotglob
-          tar -C app-tmp -cf app.tar .
-          tar -xf app.tar
-          rm -rf app-tmp app.tar
+          set -euo pipefail
+          # Copy including dotfiles; the ". ." suffix is crucial
+          cp -a app-tmp/. .
+          rm -rf app-tmp
 
       - name: Generate app key and example env
+        shell: bash
         run: |
           cp -n env .env || true
           php spark key:generate || true
 
       - name: Commit and push
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
