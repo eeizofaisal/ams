@@ -23,6 +23,7 @@ jobs:
           coverage: none
 
       - name: Ensure directories
+        shell: bash
         run: |
           mkdir -p app/Database/Migrations
           mkdir -p app/Database/Seeds
@@ -33,6 +34,7 @@ jobs:
           mkdir -p app/Views/payments
 
       - name: Write migrations
+        shell: bash
         run: |
           cat > app/Database/Migrations/2025-10-07-000001_CreateCourses.php <<'PHP'
 <?php
@@ -63,6 +65,7 @@ class CreateCourses extends Migration
 	}
 }
 PHP
+
           cat > app/Database/Migrations/2025-10-07-000002_CreateStudents.php <<'PHP'
 <?php
 namespace App\Database\Migrations;
@@ -95,6 +98,7 @@ class CreateStudents extends Migration
 	}
 }
 PHP
+
           cat > app/Database/Migrations/2025-10-07-000003_CreateEnrollments.php <<'PHP'
 <?php
 namespace App\Database\Migrations;
@@ -133,6 +137,7 @@ class CreateEnrollments extends Migration
 	}
 }
 PHP
+
           cat > app/Database/Migrations/2025-10-07-000004_CreatePayments.php <<'PHP'
 <?php
 namespace App\Database\Migrations;
@@ -166,6 +171,7 @@ class CreatePayments extends Migration
 	}
 }
 PHP
+
           cat > app/Database/Migrations/2025-10-07-000005_CreateReceiptCounters.php <<'PHP'
 <?php
 namespace App\Database\Migrations;
@@ -193,6 +199,7 @@ class CreateReceiptCounters extends Migration
 PHP
 
       - name: Write models
+        shell: bash
         run: |
           cat > app/Models/CourseModel.php <<'PHP'
 <?php
@@ -208,6 +215,7 @@ class CourseModel extends Model
 	protected $useTimestamps = true;
 }
 PHP
+
           cat > app/Models/StudentModel.php <<'PHP'
 <?php
 namespace App\Models;
@@ -222,6 +230,7 @@ class StudentModel extends Model
 	protected $useTimestamps = true;
 }
 PHP
+
           cat > app/Models/EnrollmentModel.php <<'PHP'
 <?php
 namespace App\Models;
@@ -239,6 +248,7 @@ class EnrollmentModel extends Model
 	protected $useTimestamps = true;
 }
 PHP
+
           cat > app/Models/PaymentModel.php <<'PHP'
 <?php
 namespace App\Models;
@@ -255,6 +265,7 @@ class PaymentModel extends Model
 PHP
 
       - name: Write services
+        shell: bash
         run: |
           cat > app/Services/ReceiptService.php <<'PHP'
 <?php
@@ -277,6 +288,7 @@ class ReceiptService
 	}
 }
 PHP
+
           cat > app/Services/ReceiptNumberService.php <<'PHP'
 <?php
 namespace App\Services;
@@ -312,6 +324,7 @@ class ReceiptNumberService
 PHP
 
       - name: Write controllers
+        shell: bash
         run: |
           cat > app/Controllers/Students.php <<'PHP'
 <?php
@@ -381,6 +394,7 @@ class Students extends Controller
 	}
 }
 PHP
+
           cat > app/Controllers/Payments.php <<'PHP'
 <?php
 namespace App\Controllers;
@@ -499,6 +513,7 @@ class Payments extends Controller
 PHP
 
       - name: Write views
+        shell: bash
         run: |
           cat > app/Views/students/create.php <<'PHP'
 <?= session('errors') ? '<div class="alert alert-danger">'.implode('<br>', session('errors')).'</div>' : '' ?>
@@ -583,6 +598,7 @@ document.getElementById('plan_type').addEventListener('change', function() {
 });
 </script>
 PHP
+
           cat > app/Views/payments/create.php <<'PHP'
 <div class="container mt-4">
 	<h3>Record Payment</h3>
@@ -615,6 +631,7 @@ PHP
 	</form>
 </div>
 PHP
+
           cat > app/Views/payments/receipt.php <<'PHP'
 <?php
 $amountFmt = number_format((float)$payment['amount'], 2);
@@ -684,9 +701,9 @@ $amountFmt = number_format((float)$payment['amount'], 2);
 PHP
 
       - name: Update routes
+        shell: bash
         run: |
-          sed -i '/\s*\/\//q' app/Config/Routes.php || true
-          grep -q "Students::create" app/Config/Routes.php || cat >> app/Config/Routes.php <<'PHP'
+          cat >> app/Config/Routes.php <<'PHP'
 
 $routes->get('/students/create', 'Students::create');
 $routes->post('/students', 'Students::store');
@@ -698,28 +715,8 @@ $routes->get('/payments/(:num)/receipt', 'Payments::receipt/$1');
 $routes->post('/payments/(:num)/email', 'Payments::emailReceipt/$1');
 PHP
 
-      - name: Seed demo courses
-        run: |
-          cat > app/Database/Seeds/CourseSeeder.php <<'PHP'
-<?php
-namespace App\Database\Seeds;
-
-use CodeIgniter\Database\Seeder;
-
-class CourseSeeder extends Seeder
-{
-	public function run()
-	{
-		$this->db->table('courses')->insertBatch([
-			['name' => 'Digital Marketing', 'duration_months' => 3, 'default_fee' => 45000],
-			['name' => 'Agentic AI', 'duration_months' => 2, 'default_fee' => 60000],
-			['name' => 'Web Development', 'duration_months' => 4, 'default_fee' => 55000],
-		]);
-	}
-}
-PHP
-
       - name: Commit and push module
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
