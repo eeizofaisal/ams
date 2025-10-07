@@ -1,0 +1,732 @@
+name: Add Student Registration + Receipts Module
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  add-module:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+          coverage: none
+
+      - name: Ensure directories
+        run: |
+          mkdir -p app/Database/Migrations
+          mkdir -p app/Database/Seeds
+          mkdir -p app/Models
+          mkdir -p app/Services
+          mkdir -p app/Controllers
+          mkdir -p app/Views/students
+          mkdir -p app/Views/payments
+
+      - name: Write migrations
+        run: |
+          cat > app/Database/Migrations/2025-10-07-000001_CreateCourses.php <<'PHP'
+<?php
+namespace App\Database\Migrations;
+
+use CodeIgniter\Database\Migration;
+
+class CreateCourses extends Migration
+{
+	public function up()
+	{
+		$this->forge->addField([
+			'id' => ['type' => 'INT','constraint' => 11,'unsigned' => true,'auto_increment' => true],
+			'name' => ['type' => 'VARCHAR','constraint' => 150],
+			'description' => ['type' => 'TEXT','null' => true],
+			'duration_months' => ['type' => 'INT','constraint' => 3,'null' => true],
+			'default_fee' => ['type' => 'DECIMAL','constraint' => '12,2','null' => true],
+			'created_at' => ['type' => 'DATETIME','null' => true],
+			'updated_at' => ['type' => 'DATETIME','null' => true],
+		]);
+		$this->forge->addKey('id', true);
+		$this->forge->createTable('courses');
+	}
+
+	public function down()
+	{
+		$this->forge->dropTable('courses');
+	}
+}
+PHP
+          cat > app/Database/Migrations/2025-10-07-000002_CreateStudents.php <<'PHP'
+<?php
+namespace App\Database\Migrations;
+
+use CodeIgniter\Database\Migration;
+
+class CreateStudents extends Migration
+{
+	public function up()
+	{
+		$this->forge->addField([
+			'id' => ['type' => 'INT','constraint' => 11,'unsigned' => true,'auto_increment' => true],
+			'full_name' => ['type' => 'VARCHAR','constraint' => 150],
+			'email' => ['type' => 'VARCHAR','constraint' => 191,'null' => true],
+			'phone' => ['type' => 'VARCHAR','constraint' => 30,'null' => true],
+			'dob' => ['type' => 'DATE','null' => true],
+			'address' => ['type' => 'VARCHAR','constraint' => 255,'null' => true],
+			'created_at' => ['type' => 'DATETIME','null' => true],
+			'updated_at' => ['type' => 'DATETIME','null' => true],
+		]);
+		$this->forge->addKey('id', true);
+		$this->forge->addKey('email');
+		$this->forge->addKey('phone');
+		$this->forge->createTable('students');
+	}
+
+	public function down()
+	{
+		$this->forge->dropTable('students');
+	}
+}
+PHP
+          cat > app/Database/Migrations/2025-10-07-000003_CreateEnrollments.php <<'PHP'
+<?php
+namespace App\Database\Migrations;
+
+use CodeIgniter\Database\Migration;
+
+class CreateEnrollments extends Migration
+{
+	public function up()
+	{
+		$this->forge->addField([
+			'id' => ['type' => 'INT','constraint' => 11,'unsigned' => true,'auto_increment' => true],
+			'student_id' => ['type' => 'INT','constraint' => 11,'unsigned' => true],
+			'course_id' => ['type' => 'INT','constraint' => 11,'unsigned' => true],
+			'plan_type' => ['type' => 'ENUM','constraint' => ['one_time', 'monthly'], 'default' => 'one_time'],
+			'start_date' => ['type' => 'DATE','null' => true],
+			'end_date' => ['type' => 'DATE','null' => true],
+			'monthly_fee' => ['type' => 'DECIMAL','constraint' => '12,2','null' => true],
+			'total_fee' => ['type' => 'DECIMAL','constraint' => '12,2','null' => true],
+			'reminder_day' => ['type' => 'TINYINT','constraint' => 2,'null' => true],
+			'reminder_date' => ['type' => 'DATE','null' => true],
+			'status' => ['type' => 'ENUM','constraint' => ['active','completed','cancelled'],'default' => 'active'],
+			'created_at' => ['type' => 'DATETIME','null' => true],
+			'updated_at' => ['type' => 'DATETIME','null' => true],
+		]);
+		$this->forge->addKey('id', true);
+		$this->forge->addKey(['student_id','course_id']);
+		$this->forge->addForeignKey('student_id','students','id','CASCADE','CASCADE');
+		$this->forge->addForeignKey('course_id','courses','id','CASCADE','RESTRICT');
+		$this->forge->createTable('enrollments');
+	}
+
+	public function down()
+	{
+		$this->forge->dropTable('enrollments');
+	}
+}
+PHP
+          cat > app/Database/Migrations/2025-10-07-000004_CreatePayments.php <<'PHP'
+<?php
+namespace App\Database\Migrations;
+
+use CodeIgniter\Database\Migration;
+
+class CreatePayments extends Migration
+{
+	public function up()
+	{
+		$this->forge->addField([
+			'id' => ['type' => 'INT','constraint' => 11,'unsigned' => true,'auto_increment' => true],
+			'enrollment_id' => ['type' => 'INT','constraint' => 11,'unsigned' => true],
+			'amount' => ['type' => 'DECIMAL','constraint' => '12,2'],
+			'paid_on' => ['type' => 'DATE','null' => false],
+			'method' => ['type' => 'VARCHAR','constraint' => 50,'default' => 'cash'],
+			'receipt_number' => ['type' => 'VARCHAR','constraint' => 30,'unique' => true],
+			'notes' => ['type' => 'VARCHAR','constraint' => 255,'null' => true],
+			'created_at' => ['type' => 'DATETIME','null' => true],
+			'updated_at' => ['type' => 'DATETIME','null' => true],
+		]);
+		$this->forge->addKey('id', true);
+		$this->forge->addKey('enrollment_id');
+		$this->forge->addForeignKey('enrollment_id','enrollments','id','CASCADE','CASCADE');
+		$this->forge->createTable('payments');
+	}
+
+	public function down()
+	{
+		$this->forge->dropTable('payments');
+	}
+}
+PHP
+          cat > app/Database/Migrations/2025-10-07-000005_CreateReceiptCounters.php <<'PHP'
+<?php
+namespace App\Database\Migrations;
+
+use CodeIgniter\Database\Migration;
+
+class CreateReceiptCounters extends Migration
+{
+	public function up()
+	{
+		$this->forge->addField([
+			'year' => ['type' => 'INT','constraint' => 4,'unsigned' => true],
+			'last_number' => ['type' => 'INT','constraint' => 11,'unsigned' => true,'default' => 0],
+			'updated_at' => ['type' => 'DATETIME','null' => true],
+		]);
+		$this->forge->addKey('year', true);
+		$this->forge->createTable('receipt_counters');
+	}
+
+	public function down()
+	{
+		$this->forge->dropTable('receipt_counters');
+	}
+}
+PHP
+
+      - name: Write models
+        run: |
+          cat > app/Models/CourseModel.php <<'PHP'
+<?php
+namespace App\Models;
+
+use CodeIgniter\Model;
+
+class CourseModel extends Model
+{
+	protected $table = 'courses';
+	protected $primaryKey = 'id';
+	protected $allowedFields = ['name','description','duration_months','default_fee'];
+	protected $useTimestamps = true;
+}
+PHP
+          cat > app/Models/StudentModel.php <<'PHP'
+<?php
+namespace App\Models;
+
+use CodeIgniter\Model;
+
+class StudentModel extends Model
+{
+	protected $table = 'students';
+	protected $primaryKey = 'id';
+	protected $allowedFields = ['full_name','email','phone','dob','address'];
+	protected $useTimestamps = true;
+}
+PHP
+          cat > app/Models/EnrollmentModel.php <<'PHP'
+<?php
+namespace App\Models;
+
+use CodeIgniter\Model;
+
+class EnrollmentModel extends Model
+{
+	protected $table = 'enrollments';
+	protected $primaryKey = 'id';
+	protected $allowedFields = [
+		'student_id','course_id','plan_type','start_date','end_date',
+		'monthly_fee','total_fee','reminder_day','reminder_date','status'
+	];
+	protected $useTimestamps = true;
+}
+PHP
+          cat > app/Models/PaymentModel.php <<'PHP'
+<?php
+namespace App\Models;
+
+use CodeIgniter\Model;
+
+class PaymentModel extends Model
+{
+	protected $table = 'payments';
+	protected $primaryKey = 'id';
+	protected $allowedFields = ['enrollment_id','amount','paid_on','method','receipt_number','notes'];
+	protected $useTimestamps = true;
+}
+PHP
+
+      - name: Write services
+        run: |
+          cat > app/Services/ReceiptService.php <<'PHP'
+<?php
+namespace App\Services;
+
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
+class ReceiptService
+{
+	public function generatePdf(string $html): string
+	{
+		$options = new Options();
+		$options->set('isRemoteEnabled', true);
+		$dompdf = new Dompdf($options);
+		$dompdf->loadHtml($html, 'UTF-8');
+		$dompdf->setPaper('A4', 'portrait');
+		$dompdf->render();
+		return $dompdf->output();
+	}
+}
+PHP
+          cat > app/Services/ReceiptNumberService.php <<'PHP'
+<?php
+namespace App\Services;
+
+use CodeIgniter\Database\BaseConnection;
+
+class ReceiptNumberService
+{
+	private BaseConnection $db;
+
+	public function __construct(?BaseConnection $db = null)
+	{
+		$this->db = $db ?? db_connect();
+	}
+
+	public function nextReceiptNumber(): string
+	{
+		$year = (int)date('Y');
+		$this->db->transStart();
+		$row = $this->db->table('receipt_counters')->where('year', $year)->get()->getRow();
+		if (!$row) {
+			$this->db->table('receipt_counters')->insert(['year' => $year, 'last_number' => 0, 'updated_at' => date('Y-m-d H:i:s')]);
+			$last = 0;
+		} else {
+			$last = (int)$row->last_number;
+		}
+		$next = $last + 1;
+		$this->db->table('receipt_counters')->where('year', $year)->update(['last_number' => $next, 'updated_at' => date('Y-m-d H:i:s')]);
+		$this->db->transComplete();
+		return sprintf('REC-%d-%06d', $year, $next);
+	}
+}
+PHP
+
+      - name: Write controllers
+        run: |
+          cat > app/Controllers/Students.php <<'PHP'
+<?php
+namespace App\Controllers;
+
+use App\Models\CourseModel;
+use App\Models\StudentModel;
+use App\Models\EnrollmentModel;
+use CodeIgniter\Controller;
+
+class Students extends Controller
+{
+	public function create()
+	{
+		$courses = (new CourseModel())->orderBy('name')->findAll();
+		return view('students/create', ['courses' => $courses]);
+	}
+
+	public function store()
+	{
+		$rules = [
+			'full_name' => 'required|min_length[3]',
+			'email' => 'permit_empty|valid_email',
+			'phone' => 'required',
+			'course_id' => 'required|is_natural_no_zero',
+			'plan_type' => 'required|in_list[one_time,monthly]',
+			'start_date' => 'required|valid_date',
+			'monthly_fee' => 'permit_empty|decimal',
+			'total_fee' => 'permit_empty|decimal',
+			'reminder_day' => 'permit_empty|integer|greater_than_equal_to[1]|less_than_equal_to[31]',
+			'reminder_date' => 'permit_empty|valid_date',
+		];
+		if (!$this->validate($rules)) {
+			return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+		}
+
+		$students = new StudentModel();
+		$enrollments = new EnrollmentModel();
+
+		$studentId = $students->insert([
+			'full_name' => $this->request->getPost('full_name'),
+			'email' => $this->request->getPost('email'),
+			'phone' => $this->request->getPost('phone'),
+			'dob' => $this->request->getPost('dob') ?: null,
+			'address' => $this->request->getPost('address') ?: null,
+		]);
+
+		$courseId = (int)$this->request->getPost('course_id');
+		$planType = $this->request->getPost('plan_type');
+		$startDate = $this->request->getPost('start_date');
+		$endDate = $this->request->getPost('end_date') ?: null;
+
+		$enrollmentId = $enrollments->insert([
+			'student_id' => $studentId,
+			'course_id' => $courseId,
+			'plan_type' => $planType,
+			'start_date' => $startDate,
+			'end_date' => $endDate,
+			'monthly_fee' => $planType === 'monthly' ? ($this->request->getPost('monthly_fee') ?: null) : null,
+			'total_fee' => $planType === 'one_time' ? ($this->request->getPost('total_fee') ?: null) : null,
+			'reminder_day' => $planType === 'monthly' ? ($this->request->getPost('reminder_day') ?: null) : null,
+			'reminder_date' => $planType === 'one_time' ? ($this->request->getPost('reminder_date') ?: null) : null,
+		]);
+
+		return redirect()->to('/students/'.$studentId.'/enrollments/'.$enrollmentId.'/payments/create')
+			->with('message', 'Student registered. Add initial payment.');
+	}
+}
+PHP
+          cat > app/Controllers/Payments.php <<'PHP'
+<?php
+namespace App\Controllers;
+
+use App\Models\EnrollmentModel;
+use App\Models\PaymentModel;
+use App\Models\StudentModel;
+use App\Models\CourseModel;
+use App\Services\ReceiptNumberService;
+use App\Services\ReceiptService;
+use CodeIgniter\Controller;
+
+class Payments extends Controller
+{
+	public function create(int $studentId, int $enrollmentId)
+	{
+		$enrollment = (new EnrollmentModel())->find($enrollmentId);
+		$student = (new StudentModel())->find($studentId);
+		$course = (new CourseModel())->find($enrollment['course_id']);
+		return view('payments/create', ['student' => $student,'course' => $course,'enrollment' => $enrollment]);
+	}
+
+	public function store(int $studentId, int $enrollmentId)
+	{
+		$rules = [
+			'amount' => 'required|decimal',
+			'paid_on' => 'required|valid_date',
+			'method' => 'required|min_length[3]',
+		];
+		if (!$this->validate($rules)) {
+			return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+		}
+
+		$receiptNo = (new ReceiptNumberService())->nextReceiptNumber();
+
+		$payments = new PaymentModel();
+		$paymentId = $payments->insert([
+			'enrollment_id' => $enrollmentId,
+			'amount' => $this->request->getPost('amount'),
+			'paid_on' => $this->request->getPost('paid_on'),
+			'method' => $this->request->getPost('method'),
+			'receipt_number' => $receiptNo,
+			'notes' => $this->request->getPost('notes') ?: null,
+		]);
+
+		return redirect()->to('/payments/'.$paymentId.'/receipt');
+	}
+
+	public function receipt(int $paymentId)
+	{
+		$payments = new PaymentModel();
+		$payment = $payments->find($paymentId);
+		$enrollment = (new EnrollmentModel())->find($payment['enrollment_id']);
+		$student = (new StudentModel())->find($enrollment['student_id']);
+		$course = (new CourseModel())->find($enrollment['course_id']);
+
+		$html = view('payments/receipt', [
+			'payment' => $payment,
+			'student' => $student,
+			'course' => $course,
+			'enrollment' => $enrollment,
+			'currency' => 'PKR',
+			'academy' => [
+				'name' => 'Your Academy',
+				'address' => 'Karachi, Pakistan',
+				'phone' => '+92-xxx-xxxxxxx',
+				'email' => 'accounts@youracademy.pk',
+			],
+		]);
+
+		$pdf = (new ReceiptService())->generatePdf($html);
+
+		return $this->response
+			->setHeader('Content-Type', 'application/pdf')
+			->setHeader('Content-Disposition', 'inline; filename="'.$payment['receipt_number'].'.pdf"')
+			->setBody($pdf);
+	}
+
+	public function emailReceipt(int $paymentId)
+	{
+		$payments = new PaymentModel();
+		$payment = $payments->find($paymentId);
+		$enrollment = (new EnrollmentModel())->find($payment['enrollment_id']);
+		$student = (new StudentModel())->find($enrollment['student_id']);
+		$course = (new CourseModel())->find($enrollment['course_id']);
+
+		$html = view('payments/receipt', [
+			'payment' => $payment,
+			'student' => $student,
+			'course' => $course,
+			'enrollment' => $enrollment,
+			'currency' => 'PKR',
+			'academy' => [
+				'name' => 'Your Academy',
+				'address' => 'Karachi, Pakistan',
+				'phone' => '+92-xxx-xxxxxxx',
+				'email' => 'accounts@youracademy.pk',
+			],
+		]);
+
+		$pdf = (new \App\Services\ReceiptService())->generatePdf($html);
+
+		$email = \Config\Services::email();
+		$email->setFrom('accounts@youracademy.pk', 'Your Academy Accounts');
+		$email->setTo($student['email'] ?? '');
+		$email->setSubject('Payment Receipt '.$payment['receipt_number']);
+		$email->setMessage('Dear '.$student['full_name'].",\n\nPlease find your receipt attached.\n\nRegards,\nYour Academy");
+		$email->attach($pdf, 'attachment', $payment['receipt_number'].'.pdf', 'application/pdf');
+
+		if (!$email->send()) {
+			return redirect()->back()->with('error', 'Failed to send email. Configure SMTP.');
+		}
+		return redirect()->back()->with('message', 'Receipt emailed to student.');
+	}
+}
+PHP
+
+      - name: Write views
+        run: |
+          cat > app/Views/students/create.php <<'PHP'
+<?= session('errors') ? '<div class="alert alert-danger">'.implode('<br>', session('errors')).'</div>' : '' ?>
+<div class="container mt-4">
+	<h3>Student Registration</h3>
+	<form method="post" action="/students">
+		<?= csrf_field() ?>
+		<div class="row">
+			<div class="col-md-6">
+				<label class="form-label">Full Name</label>
+				<input name="full_name" class="form-control" required value="<?= old('full_name') ?>">
+			</div>
+			<div class="col-md-6">
+				<label class="form-label">Email</label>
+				<input type="email" name="email" class="form-control" value="<?= old('email') ?>">
+			</div>
+			<div class="col-md-6 mt-3">
+				<label class="form-label">Phone</label>
+				<input name="phone" class="form-control" required value="<?= old('phone') ?>">
+			</div>
+			<div class="col-md-6 mt-3">
+				<label class="form-label">Date of Birth</label>
+				<input type="date" name="dob" class="form-control" value="<?= old('dob') ?>">
+			</div>
+			<div class="col-md-12 mt-3">
+				<label class="form-label">Address</label>
+				<input name="address" class="form-control" value="<?= old('address') ?>">
+			</div>
+		</div>
+
+		<hr class="my-4">
+
+		<div class="row">
+			<div class="col-md-6">
+				<label class="form-label">Course</label>
+				<select name="course_id" class="form-select" required>
+					<option value="">Select Course</option>
+					<?php foreach ($courses as $c): ?>
+						<option value="<?= $c['id'] ?>"><?= esc($c['name']) ?></option>
+					<?php endforeach ?>
+				</select>
+			</div>
+			<div class="col-md-6">
+				<label class="form-label">Plan Type</label>
+				<select name="plan_type" id="plan_type" class="form-select" required>
+					<option value="one_time">One-time</option>
+					<option value="monthly">Monthly</option>
+				</select>
+			</div>
+			<div class="col-md-6 mt-3">
+				<label class="form-label">Start Date</label>
+				<input type="date" name="start_date" class="form-control" required>
+			</div>
+			<div class="col-md-6 mt-3">
+				<label class="form-label">End Date</label>
+				<input type="date" name="end_date" class="form-control">
+			</div>
+
+			<div id="one_time_fields" class="col-md-6 mt-3">
+				<label class="form-label">Total Fee (PKR)</label>
+				<input name="total_fee" class="form-control">
+				<label class="form-label mt-3">Reminder Date</label>
+				<input type="date" name="reminder_date" class="form-control">
+			</div>
+
+			<div id="monthly_fields" class="col-md-6 mt-3" style="display:none;">
+				<label class="form-label">Monthly Fee (PKR)</label>
+				<input name="monthly_fee" class="form-control">
+				<label class="form-label mt-3">Reminder Day (1-31)</label>
+				<input type="number" name="reminder_day" class="form-control" min="1" max="31">
+			</div>
+		</div>
+
+		<button class="btn btn-primary mt-4">Register & Continue to Payment</button>
+	</form>
+</div>
+<script>
+document.getElementById('plan_type').addEventListener('change', function() {
+	const isMonthly = this.value === 'monthly';
+	document.getElementById('monthly_fields').style.display = isMonthly ? 'block' : 'none';
+	document.getElementById('one_time_fields').style.display = isMonthly ? 'none' : 'block';
+});
+</script>
+PHP
+          cat > app/Views/payments/create.php <<'PHP'
+<div class="container mt-4">
+	<h3>Record Payment</h3>
+	<p>
+		<strong>Student:</strong> <?= esc($student['full_name']) ?><br>
+		<strong>Course:</strong> <?= esc($course['name']) ?><br>
+		<strong>Plan:</strong> <?= esc($enrollment['plan_type']) ?>
+	</p>
+	<form method="post" action="/students/<?= $student['id'] ?>/enrollments/<?= $enrollment['id'] ?>/payments">
+		<?= csrf_field() ?>
+		<div class="row">
+			<div class="col-md-4">
+				<label class="form-label">Amount (PKR)</label>
+				<input name="amount" class="form-control" required>
+			</div>
+			<div class="col-md-4">
+				<label class="form-label">Paid On</label>
+				<input type="date" name="paid_on" class="form-control" required value="<?= date('Y-m-d') ?>">
+			</div>
+			<div class="col-md-4">
+				<label class="form-label">Method</label>
+				<input name="method" class="form-control" value="cash" required>
+			</div>
+			<div class="col-md-12 mt-3">
+				<label class="form-label">Notes</label>
+				<input name="notes" class="form-control">
+			</div>
+		</div>
+		<button class="btn btn-success mt-4">Save & Generate Receipt</button>
+	</form>
+</div>
+PHP
+          cat > app/Views/payments/receipt.php <<'PHP'
+<?php
+$amountFmt = number_format((float)$payment['amount'], 2);
+?>
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<style>
+		body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; }
+		.header { border-bottom: 2px solid #333; margin-bottom: 12px; }
+		.row { display: flex; justify-content: space-between; }
+		.table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+		.table th, .table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+		.right { text-align: right; }
+	</style>
+</head>
+<body>
+	<div class="header">
+		<div class="row">
+			<div>
+				<h2 style="margin:0;"><?= esc($academy['name']) ?></h2>
+				<div><?= esc($academy['address']) ?></div>
+				<div><?= esc($academy['phone']) ?> | <?= esc($academy['email']) ?></div>
+			</div>
+			<div class="right">
+				<h3 style="margin:0;">Receipt</h3>
+				<div><?= esc($payment['receipt_number']) ?></div>
+				<div>Date: <?= esc($payment['paid_on']) ?></div>
+			</div>
+		</div>
+	</div>
+
+	<div>
+		<strong>Received From:</strong> <?= esc($student['full_name']) ?><br>
+		<strong>Course:</strong> <?= esc($course['name']) ?><br>
+		<strong>Plan:</strong> <?= esc($enrollment['plan_type']) ?>
+	</div>
+
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Description</th>
+				<th class="right">Amount (<?= esc($currency) ?>)</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td><?= esc($enrollment['plan_type'] === 'monthly' ? 'Monthly Fee' : 'Course Fee') ?></td>
+				<td class="right"><?= $amountFmt ?></td>
+			</tr>
+		</tbody>
+		<tfoot>
+			<tr>
+				<th>Total</th>
+				<th class="right"><?= $amountFmt ?></th>
+			</tr>
+		</tfoot>
+	</table>
+
+	<div style="margin-top: 24px;">
+		<strong>Payment Method:</strong> <?= esc($payment['method']) ?><br>
+		<em>This is a computer-generated receipt and does not require a signature.</em>
+	</div>
+</body>
+</html>
+PHP
+
+      - name: Update routes
+        run: |
+          sed -i '/\s*\/\//q' app/Config/Routes.php || true
+          grep -q "Students::create" app/Config/Routes.php || cat >> app/Config/Routes.php <<'PHP'
+
+$routes->get('/students/create', 'Students::create');
+$routes->post('/students', 'Students::store');
+
+$routes->get('/students/(:num)/enrollments/(:num)/payments/create', 'Payments::create/$1/$2');
+$routes->post('/students/(:num)/enrollments/(:num)/payments', 'Payments::store/$1/$2');
+
+$routes->get('/payments/(:num)/receipt', 'Payments::receipt/$1');
+$routes->post('/payments/(:num)/email', 'Payments::emailReceipt/$1');
+PHP
+
+      - name: Seed demo courses
+        run: |
+          cat > app/Database/Seeds/CourseSeeder.php <<'PHP'
+<?php
+namespace App\Database\Seeds;
+
+use CodeIgniter\Database\Seeder;
+
+class CourseSeeder extends Seeder
+{
+	public function run()
+	{
+		$this->db->table('courses')->insertBatch([
+			['name' => 'Digital Marketing', 'duration_months' => 3, 'default_fee' => 45000],
+			['name' => 'Agentic AI', 'duration_months' => 2, 'default_fee' => 60000],
+			['name' => 'Web Development', 'duration_months' => 4, 'default_fee' => 55000],
+		]);
+	}
+}
+PHP
+
+      - name: Commit and push module
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Add student registration, enrollments, payments, PDF receipts, email"
+            git push
+          fi
