@@ -1,0 +1,31 @@
+name: Init CI4
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Install Composer
+        run: sudo apt-get update && sudo apt-get install -y unzip
+      - name: Create CodeIgniter 4 app
+        run: |
+          rm -rf ./* .[^.] .??* || true
+          composer create-project codeigniter4/appstarter .
+      - name: Require dompdf
+        run: composer require dompdf/dompdf:^2.0
+      - name: Commit generated app
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Initialize CodeIgniter 4 app with dompdf"
+          git push
