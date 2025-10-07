@@ -13,7 +13,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          fetch-depth: 0
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -21,31 +21,38 @@ jobs:
           php-version: '8.2'
           coverage: none
 
-      - name: Install unzip
+      - name: Install system deps
         run: sudo apt-get update && sudo apt-get install -y unzip
 
-      - name: Composer create-project into temp dir
-        run: |
-          composer --version
-          rm -rf /tmp/ci4app
-          composer create-project codeigniter4/appstarter /tmp/ci4app
+      - name: Create CI4 app in temp dir
+        run: composer create-project codeigniter4/appstarter app-tmp
 
-      - name: Require dompdf in temp app
-        run: |
-          cd /tmp/ci4app
-          composer require dompdf/dompdf:^2.0
+      - name: Require dompdf inside temp app
+        working-directory: app-tmp
+        run: composer require dompdf/dompdf:^2.0
 
-      - name: Move files into repo (preserve .git)
+      - name: Move app files to repo (preserve .git)
         run: |
           shopt -s dotglob
-          rm -rf !( .git )
-          cp -r /tmp/ci4app/* .
-          cp -r /tmp/ci4app/.* . || true
+          rm -rf ./* || true
+          shopt -u dotglob
+          tar -C app-tmp -cf app.tar .
+          tar -xf app.tar
+          rm -rf app-tmp app.tar
+
+      - name: Generate app key and example env
+        run: |
+          cp -n env .env || true
+          php spark key:generate || true
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Initialize CodeIgniter 4 app with dompdf" || echo "Nothing to commit"
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Initialize CodeIgniter 4 app with dompdf"
+            git push
+          fi
